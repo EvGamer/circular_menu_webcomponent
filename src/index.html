@@ -10,7 +10,8 @@
       }
     }
   </script>
-  <script src="circular-menu.mjs" type="module"></script>
+  <script src="circular-menu.mjs" type="module">
+  </script>
   <script type="module">
     import { CircularMenu } from "circular-menu";
 
@@ -18,7 +19,14 @@
     window.customElements.define("circular-menu", CircularMenu);
   </script>
   <div class="button-container">
-    <circular-menu></circular-menu>
+    
+    <circular-menu>
+      <option value="tiny">XS</option>
+      <option value="small">S</option>
+      <option value="medium">M</option>
+      <option value="large">L</option>
+      <option value="huge">XL</option>
+    </circular-menu>
   </div>
   <style>
     body {
@@ -27,7 +35,7 @@
       display: flex;
       justify-content: center;
       align-items: center;
-      background-color: black;
+      background-color: #252525;
     }
 
     .button-container {
