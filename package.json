@@ -1,0 +1,29 @@
+{
+  "name": "circular_menu_webcomponent",
+  "version": "1.0.0",
+  "description": "A circular menu made with modern vanilla js and web components",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "serve": "http-server ./src -p 8080 -c-1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EvGamer/circular_menu_webcomponent.git"
+  },
+  "keywords": [
+    "webcomponent",
+    "menu",
+    "select",
+    "circular-menu"
+  ],
+  "author": "Eugene Kuzmenko",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/EvGamer/circular_menu_webcomponent/issues"
+  },
+  "homepage": "https://github.com/EvGamer/circular_menu_webcomponent#readme",
+  "dependencies": {
+    "http-server": "^14.1.1"
+  }
+}
