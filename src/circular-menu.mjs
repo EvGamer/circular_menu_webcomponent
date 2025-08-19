@@ -2,12 +2,21 @@ const toDeg = (radianAngle) => {
   return ((180 * radianAngle) / Math.PI).toFixed(2);
 }
 
-const createSectorSvg = (radius, radialHeight, angle) => {
-  const bottomRadius = radius - radialHeight;
+const createSectorSvg = ({ radius, radialHeight, angle, strokeWidth }) => {
+  const topArcRadius = radius - halfStroke;
+  const bottomArcRadius = radius - radialHeight + halfStroke;
+
+  const halfStroke = strokeWidth / 2;
+
+  // correcting angle so it take in the acount size reduction to make way to a stroke
+  const topArcAngle = (angle * topArcRadius - strokeWidth) / topArcRadius;
+  const bottomArcAngle = (angle * bottomArcRadius - strokeWidth) / bottomArcRadius;
 
   const halfAngle = angle / 2;
   const halfAngleCos = Math.cos(halfAngle)
-  const height = radius - bottomRadius * halfAngleCos;
+
+  const distanceBetweenBottomArcCircleCenterAndBase = bottomArcRadius * Math.cos(bottomArcAngle / 2)
+  const height = radius - distanceBetweenBottomArcCircleCenterAndBase;
   const heightStr = height.toFixed(2);
 
   const topY = radius - radius * halfAngleCos;
@@ -36,7 +45,7 @@ const createSectorSvg = (radius, radialHeight, angle) => {
       M 0 ${topYStr}
       A ${radius} ${radius} ${angleDeg} 0 1 ${widthStr} ${topYStr}
       L ${bottomRightX.toFixed(2)} ${bottomYStr}
-      A ${bottomRadius} ${bottomRadius} ${angleDeg} 0 0 ${bottomLeftX.toFixed(2)} ${bottomYStr}
+      A ${bottomArcRadius} ${bottomArcRadius} ${angleDeg} 0 0 ${bottomLeftX.toFixed(2)} ${bottomYStr}
       L 0 ${topYStr}
     `
   )
@@ -122,6 +131,7 @@ export class CircularMenu extends HTMLElement {
     const sectorAngleDeg = 360 / optionElements.length;
     const sectorAngleRad = 2 * Math.PI / optionElements.length;
     const gap = 2;
+    const strokeWidth = 2;
 
     let i = 0;
     for (const optionElement of optionElements) {
@@ -129,7 +139,12 @@ export class CircularMenu extends HTMLElement {
       menuItemAnchor.className = "menu-item-anchor";
       menuItemAnchor.style.transform = `rotate(${sectorAngleDeg * i}deg)`;
 
-      const menuItemBackground = createSectorSvg(menuRadius - gap, menuRadius - (buttonRadius + gap), sectorAngleRad);
+      const menuItemBackground = createSectorSvg({
+        radius: menuRadius - gap,
+        radialHeight: menuRadius - (buttonRadius + gap),
+        angle: sectorAngleRad,
+        strokeWidth: 2,
+      );
       menuItemBackground.classList.add("menu-item-background");
 
       const menuItemContainer = document.createElement("div");
