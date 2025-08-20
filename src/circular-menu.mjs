@@ -2,51 +2,67 @@ const toDeg = (radianAngle) => {
   return ((180 * radianAngle) / Math.PI).toFixed(2);
 }
 
-const createSectorSvg = ({ radius, radialHeight, angle, strokeWidth }) => {
-  const topArcRadius = radius - halfStroke;
-  const bottomArcRadius = radius - radialHeight + halfStroke;
+const stringifyPoint = ({ x, y }) => `${x.toFixed(2)} ${y.toFixed(2)}`;
 
+const getArcPathDirective = ({ radius, angle, left, right, isReverse }) => {
+  const radiusStr = radius.toFixed(2);
+  return isReverse 
+    ? `A ${radiusStr} ${radiusStr} ${toDeg(angle)} 0 0 ${stringifyPoint(left)}`
+    : `A ${radiusStr} ${radiusStr} ${toDeg(angle)} 0 1 ${stringifyPoint(right)}`
+}
+
+const getCentralArchChorde = ({ radius, angle, x = 0, y = 0 }) => {
+  const halfChord = Math.sin(angle / 2) * radius;
+  const chordY = -Math.cos(angle / 2) * radius;
+
+  const left = { x: x - halfChord, y: y + chordY };
+  const right = { x: x + halfChord, y: y + chordY };
+
+  return {
+    angle, 
+    left,
+    right,
+    radius,
+  }
+}
+
+const createSectorSvg = ({ radius, radialHeight, angle, strokeWidth, gap }) => {
   const halfStroke = strokeWidth / 2;
 
+  const outerRadius = radius - halfStroke;
+  const innerRadius = radius - radialHeight + halfStroke;
+
   // correcting angle so it take in the acount size reduction to make way to a stroke
-  const topArcAngle = (angle * topArcRadius - strokeWidth) / topArcRadius;
-  const bottomArcAngle = (angle * bottomArcRadius - strokeWidth) / bottomArcRadius;
+  const outerAngle = (angle * outerRadius - strokeWidth - gap) / outerRadius;
+  const innerAngle = (angle * innerRadius - strokeWidth - gap) / innerRadius;
+  console.log(outerAngle, innerAngle);
 
-  const halfAngle = angle / 2;
-  const halfAngleCos = Math.cos(halfAngle)
+  const outerArcChorde = getCentralArchChorde({ radius: outerRadius, angle: outerAngle });
+  const innerArcChorde = getCentralArchChorde({ radius: innerRadius, angle: innerAngle });
 
-  const distanceBetweenBottomArcCircleCenterAndBase = bottomArcRadius * Math.cos(bottomArcAngle / 2)
-  const height = radius - distanceBetweenBottomArcCircleCenterAndBase;
-  const heightStr = height.toFixed(2);
-
-  const topY = radius - radius * halfAngleCos;
-  const bottomY = height;
-
-  const halfAngleSin = Math.sin(halfAngle);
-  const bottomLeftX = radialHeight * halfAngleSin;
-  const width = 2 * radius * halfAngleSin;
-  const widthStr = width.toFixed(2);
-  const bottomRightX = width - bottomLeftX;
+  const height = radius + innerArcChorde.left.y + halfStroke; // chorde position - is position relative to radius, but axis is flipped;
+  const width = outerArcChorde.right.x - outerArcChorde.left.x + halfStroke;
 
   const svgStandardURI = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(svgStandardURI, "svg");
-  svg.setAttribute("width", widthStr);
-  svg.setAttribute("height", heightStr);
-  svg.setAttribute("viewbox", `-1 -1 ${widthStr} ${heightStr}`)
+  svg.setAttribute("width", width.toFixed(2));
+  svg.setAttribute("height", height.toFixed(2));
 
-  const angleDeg = toDeg(angle);
+  const viewBoxPosition = { x: outerArcChorde.left.x - halfStroke, y: -radius - halfStroke };
+  const viewBoxDimentions = { x: width, y: height };
+  svg.setAttribute("viewBox", `${stringifyPoint(viewBoxPosition)} ${stringifyPoint(viewBoxDimentions)}`)
+  svg.setAttribute("stroke-width", strokeWidth);
+
   const pathElement = document.createElementNS(svgStandardURI, "path");
 
-  const topYStr = topY.toFixed(2);
-  const bottomYStr = bottomY.toFixed(2);
   pathElement.setAttribute(
     "d", 
     `
-      M 0 ${topYStr}
-      A ${radius} ${radius} ${angleDeg} 0 1 ${widthStr} ${topYStr}
-      L ${bottomRightX.toFixed(2)} ${bottomYStr}
-      A ${bottomArcRadius} ${bottomArcRadius} ${angleDeg} 0 0 ${bottomLeftX.toFixed(2)} ${bottomYStr}
-      L 0 ${topYStr}
+      M ${stringifyPoint(outerArcChorde.left)}
+      ${getArcPathDirective({ ...outerArcChorde })}
+      L ${stringifyPoint(innerArcChorde.right)}
+      ${getArcPathDirective({ ...innerArcChorde, isReverse: true })}
+      L ${stringifyPoint(outerArcChorde.left)}
     `
   )
   svg.appendChild(pathElement)
@@ -130,8 +146,8 @@ export class CircularMenu extends HTMLElement {
 
     const sectorAngleDeg = 360 / optionElements.length;
     const sectorAngleRad = 2 * Math.PI / optionElements.length;
-    const gap = 2;
-    const strokeWidth = 2;
+    const gap = 4;
+    const strokeWidth = 4;
 
     let i = 0;
     for (const optionElement of optionElements) {
@@ -140,11 +156,12 @@ export class CircularMenu extends HTMLElement {
       menuItemAnchor.style.transform = `rotate(${sectorAngleDeg * i}deg)`;
 
       const menuItemBackground = createSectorSvg({
-        radius: menuRadius - gap,
+        radius: menuRadius,
         radialHeight: menuRadius - (buttonRadius + gap),
         angle: sectorAngleRad,
-        strokeWidth: 2,
-      );
+        gap,
+        strokeWidth,
+      });
       menuItemBackground.classList.add("menu-item-background");
 
       const menuItemContainer = document.createElement("div");
@@ -202,7 +219,7 @@ export class CircularMenu extends HTMLElement {
         position: absolute;
         z-index: 0;
         width: ${menuDiameter + gap}px;
-        height: ${menuDiameter + gap}px;
+        height: ${menuDiameter + gap * 2 + strokeWidth}px;
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
@@ -237,7 +254,6 @@ export class CircularMenu extends HTMLElement {
       .menu-item-background {
         fill: var(--bg-color);
         stroke: var(--stroke-color);
-        stroke-width: var(--stroke-width);
         position: relative;
         pointer-events: fill;
       }
