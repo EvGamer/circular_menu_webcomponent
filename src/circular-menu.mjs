@@ -2,7 +2,7 @@ const toDeg = (radianAngle) => {
   return ((180 * radianAngle) / Math.PI).toFixed(2);
 }
 
-const stringifyPoint = ({ x, y }) => `${x.toFixed(2)} ${y.toFixed(2)}`;
+const stringifyPoint = ({ x, y }) => `${x.toFixed(3)} ${y.toFixed(3)}`;
 
 const getArcPathDirective = ({ radius, angle, left, right, isReverse }) => {
   const radiusStr = radius.toFixed(2);
@@ -11,58 +11,74 @@ const getArcPathDirective = ({ radius, angle, left, right, isReverse }) => {
     : `A ${radiusStr} ${radiusStr} ${toDeg(angle)} 0 1 ${stringifyPoint(right)}`
 }
 
-const getCentralArchChorde = ({ radius, angle, x = 0, y = 0 }) => {
+const getCentralArcChorde = (angle, radius, shift) => {
+  const { x = 0, y = 0 } = shift || {};
   const halfChord = Math.sin(angle / 2) * radius;
   const chordY = -Math.cos(angle / 2) * radius;
 
   const left = { x: x - halfChord, y: y + chordY };
   const right = { x: x + halfChord, y: y + chordY };
 
+  return { left, right }
+}
+
+const getArcMeasurments = (angle, radius, reduction) => {
+  const reducedAngle = (angle * radius - reduction) / radius;
   return {
-    angle, 
-    left,
-    right,
     radius,
+    angle: reducedAngle,
+    chorde: getCentralArcChorde(angle, radius),
   }
 }
 
-const createSectorSvg = ({ radius, radialHeight, angle, strokeWidth, gap }) => {
+const getSectorMeasurements = ({ outerRadius, innerRadius, angle, strokeWidth = 0, gap = 0 }) => {
   const halfStroke = strokeWidth / 2;
+  const arcSideCuts = strokeWidth + gap;
+  console.log("innerRadius", innerRadius)
+  console.log("outerRadius", outerRadius)
 
-  const outerRadius = radius - halfStroke;
-  const innerRadius = radius - radialHeight + halfStroke;
+  return {
+    outerArc: getArcMeasurments(angle, outerRadius - halfStroke, arcSideCuts),
+    innerArc: getArcMeasurments(angle, innerRadius + gap + halfStroke, arcSideCuts),
+  }
+}
 
-  // correcting angle so it take in the acount size reduction to make way to a stroke
-  const outerAngle = (angle * outerRadius - strokeWidth - gap) / outerRadius;
-  const innerAngle = (angle * innerRadius - strokeWidth - gap) / innerRadius;
-  console.log(outerAngle, innerAngle);
-
-  const outerArcChorde = getCentralArchChorde({ radius: outerRadius, angle: outerAngle });
-  const innerArcChorde = getCentralArchChorde({ radius: innerRadius, angle: innerAngle });
-
-  const height = radius + innerArcChorde.left.y + halfStroke; // chorde position - is position relative to radius, but axis is flipped;
-  const width = outerArcChorde.right.x - outerArcChorde.left.x + halfStroke;
+const createSectorSvg = ({ outerArc, innerArc, strokeWidth }) => {
+  const halfStroke = strokeWidth / 2;
+  const height = outerArc.radius + innerArc.chorde.left.y - halfStroke; // chorde position - is position relative to radius, but axis is flipped;
+  const width = outerArc.chorde.right.x - outerArc.chorde.left.x - strokeWidth;
+  console.log(">>>", outerArc, innerArc);
 
   const svgStandardURI = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(svgStandardURI, "svg");
   svg.setAttribute("width", width.toFixed(2));
   svg.setAttribute("height", height.toFixed(2));
 
-  const viewBoxPosition = { x: outerArcChorde.left.x - halfStroke, y: -radius - halfStroke };
-  const viewBoxDimentions = { x: width, y: height };
+  const viewBoxPosition = { x: outerArc.chorde.left.x - halfStroke, y: -outerArc.radius };
+  const viewBoxDimentions = { x: width + strokeWidth, y: height + strokeWidth };
   svg.setAttribute("viewBox", `${stringifyPoint(viewBoxPosition)} ${stringifyPoint(viewBoxDimentions)}`)
   svg.setAttribute("stroke-width", strokeWidth);
 
   const pathElement = document.createElementNS(svgStandardURI, "path");
 
+  const outerArcDirective = getArcPathDirective({
+    ...outerArc,
+    ...outerArc.chorde,
+  });
+  const innerArcDirective = getArcPathDirective({ 
+    ...innerArc,
+    ...innerArc.chorde,
+    isReverse: true 
+  });
+
   pathElement.setAttribute(
     "d", 
     `
-      M ${stringifyPoint(outerArcChorde.left)}
-      ${getArcPathDirective({ ...outerArcChorde })}
-      L ${stringifyPoint(innerArcChorde.right)}
-      ${getArcPathDirective({ ...innerArcChorde, isReverse: true })}
-      L ${stringifyPoint(outerArcChorde.left)}
+      M ${stringifyPoint(outerArc.chorde.left)}
+      ${outerArcDirective}
+      L ${stringifyPoint(innerArc.chorde.right)}
+      ${innerArcDirective}
+      L ${stringifyPoint(outerArc.chorde.left)}
     `
   )
   svg.appendChild(pathElement)
@@ -137,7 +153,7 @@ export class CircularMenu extends HTMLElement {
       }
     })
 
-    const buttonDiameter = 50;
+    const buttonDiameter = 65;
     const menuDiameter = 200;
     const buttonRadius = buttonDiameter / 2;
     const menuRadius = menuDiameter / 2;
@@ -146,8 +162,8 @@ export class CircularMenu extends HTMLElement {
 
     const sectorAngleDeg = 360 / optionElements.length;
     const sectorAngleRad = 2 * Math.PI / optionElements.length;
-    const gap = 4;
-    const strokeWidth = 4;
+    const gap = 10;
+    const strokeWidth = 2;
 
     let i = 0;
     for (const optionElement of optionElements) {
@@ -155,13 +171,15 @@ export class CircularMenu extends HTMLElement {
       menuItemAnchor.className = "menu-item-anchor";
       menuItemAnchor.style.transform = `rotate(${sectorAngleDeg * i}deg)`;
 
-      const menuItemBackground = createSectorSvg({
-        radius: menuRadius,
-        radialHeight: menuRadius - (buttonRadius + gap),
+      const { innerArc, outerArc } = getSectorMeasurements({
+        outerRadius: menuRadius,
+        innerRadius: buttonRadius,
         angle: sectorAngleRad,
         gap,
         strokeWidth,
-      });
+      })
+
+      const menuItemBackground = createSectorSvg({ innerArc, outerArc, strokeWidth });
       menuItemBackground.classList.add("menu-item-background");
 
       const menuItemContainer = document.createElement("div");
@@ -192,8 +210,11 @@ export class CircularMenu extends HTMLElement {
         position: relative;
         --bg-color: #424242;
         --bg-hover-color: #696969;
-        --stroke-width: 0px;
+        --stroke-width: ${strokeWidth}px;
         --stroke-color: #A0A0A0;
+        color: var(--stroke-color);
+        width: ${buttonDiameter}px;
+        height: ${buttonDiameter}px;
       }
 
       button {
@@ -207,6 +228,7 @@ export class CircularMenu extends HTMLElement {
         cursor: pointer;
         outline: none;
         z-index: 1;
+        color: var(--stroke-color);
       }
       
       button:hover {
@@ -218,8 +240,8 @@ export class CircularMenu extends HTMLElement {
         color: var(--stroke-color)
         position: absolute;
         z-index: 0;
-        width: ${menuDiameter + gap}px;
-        height: ${menuDiameter + gap * 2 + strokeWidth}px;
+        width: ${menuDiameter}px;
+        height: ${menuDiameter}px;
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
@@ -229,6 +251,7 @@ export class CircularMenu extends HTMLElement {
         position: relative;
         overflow: visible;
         pointer-events: none;
+        clip-path: stroke-box;
       }
       
       .menu-item-content {
@@ -246,8 +269,8 @@ export class CircularMenu extends HTMLElement {
         justify-content: center;
         align-items: flex-start;
         position: absolute;
-        width: ${menuDiameter + gap}px;
-        height: ${menuDiameter + gap}px;
+        width: ${menuDiameter}px;
+        height: ${menuDiameter}px;
         pointer-events: none;
       }
 
